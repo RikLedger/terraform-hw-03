@@ -17,30 +17,40 @@
 
 1. Создайте файл count-vm.tf. Опишите в нем создание двух **одинаковых** ВМ  web-1 и web-2(не web-0 и web-1!), с минимальными параметрами, используя мета-аргумент **count loop**. Назначьте ВМ созданную в 1-м задании группу безопасности.
 
-```bash
-resource "yandex_compute_instance" "web" {
+Создадим файл [count-vm.tf](src%2Fcount-vm.tf):
+```
+data "yandex_compute_image" "ubuntu" {
+  family = "ubuntu-2004-lts"
+}
+
+resource "yandex_compute_instance" "count" {
   count = 2
-  name = "develop-web-${count.index + 1}"
+  name        = "web-${count.index+1}"
+  platform_id = "standard-v1"
   resources {
     cores         = 2
     memory        = 1
     core_fraction = 5
   }
-
   boot_disk {
     initialize_params {
-      image_id = "fd8g64rcu9fq5kpfqls0"
+      image_id = data.yandex_compute_image.ubuntu.image_id
     }
   }
-
+  scheduling_policy {
+    preemptible = true
+  }
   network_interface {
     subnet_id = yandex_vpc_subnet.develop.id
     nat       = true
+    security_group_ids = [yandex_vpc_security_group.example.id]
   }
 
   metadata = {
-    ssh-keys = "ubuntu:${file("~/.ssh/id_rsa.pub")}"
+    serial-port-enable = 1
+    ssh-keys           = "ubuntu:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2kpc8hkCtD5uVQdw0wUeGlNp/rKarSrCKoifhuRtCF shakal@Razer"
   }
+
 }
 ```
 ![terraform_03_02](./2-1-1.jpg)
