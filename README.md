@@ -48,7 +48,7 @@ resource "yandex_compute_instance" "count" {
 
   metadata = {
     serial-port-enable = 1
-    ssh-keys           = "ubuntu:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2kpc8hkCtD5uVQdw0wUeGlNp/rKarSrCKoifhuRtCF gorbachev@debian"
+    ssh-keys           = "ubuntu:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2kpc8hkCtD5uVQdw0wUeGlNp/rKarSrCKoifhuRtCF gorbachev@ubuntu"
   }
 
 }
@@ -141,7 +141,7 @@ Terraform will perform the following actions:
       + id                        = (known after apply)
       + metadata                  = {
           + "ssh-keys" = <<-EOT
-                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@debian
+                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@ubuntu
             EOT
         }
       + name                      = "main"
@@ -199,7 +199,7 @@ Terraform will perform the following actions:
       + id                        = (known after apply)
       + metadata                  = {
           + "ssh-keys" = <<-EOT
-                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@debian
+                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@ubuntu
             EOT
         }
       + name                      = "replica"
@@ -257,7 +257,7 @@ Terraform will perform the following actions:
       + id                        = (known after apply)
       + metadata                  = {
           + "ssh-keys" = <<-EOT
-                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@debian
+                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@ubuntu
             EOT
         }
       + name                      = "web-1"
@@ -315,7 +315,7 @@ Terraform will perform the following actions:
       + id                        = (known after apply)
       + metadata                  = {
           + "ssh-keys" = <<-EOT
-                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@debian
+                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@ubuntu
             EOT
         }
       + name                      = "web-2"
@@ -544,7 +544,7 @@ dynamic "secondary_disk" {
 
   metadata = {
     serial-port-enable = 1
-    ssh-keys           = "ubuntu:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2kpc8hkCtD5uVQdw0wUeGlNp/rKarSrCKoifhuRtCF gorbachev@debian"
+    ssh-keys           = "ubuntu:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2kpc8hkCtD5uVQdw0wUeGlNp/rKarSrCKoifhuRtCF gorbachev@ubuntu"
   }
 
 }
@@ -584,7 +584,7 @@ Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
 
 ### Задание 4
 
-1. В файле ansible.tf создайте inventory-файл для ansible. Используйте функцию tepmplatefile и файл-шаблон для создания ansible inventory-файла из лекции. Готовый код возьмите из демонстрации к лекции demonstration2. Передайте в него в качестве переменных группы виртуальных машин из задания 2.1, 2.2 и 3.2, т. е. 5 ВМ.
+1. В файле ansible.tf создайте inventory-файл для ansible. Используйте функцию tepmplatefile и файл-шаблон для создания ansible inventory-файла из лекции. Готовый код возьмите из демонстрации к лекции demonstration2. Передайте в него в качестве переменных группы виртуальных машин из задания 2
 2. Инвентарь должен содержать 3 группы [webservers], [databases], [storage] и быть динамическим, т. е. обработать как группу из 2-х ВМ, так и 999 ВМ.
 3. Выполните код. Приложите скриншот получившегося файла.
 
