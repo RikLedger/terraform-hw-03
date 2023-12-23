@@ -57,71 +57,68 @@ resource "yandex_compute_instance" "count" {
 
 ![terraform_03_02](./2-1-2_2.jpg)
 
-2. Создайте файл for_each-vm.tf. Опишите в нем создание 2 ВМ с именами "main" и "replica" **разных** по cpu/ram/disk , используя мета-аргумент **for_each loop**. Используйте переменную типа list(object({ vm_name=string, cpu=number, ram=number, disk=number  })). При желании внесите в переменную все возможные параметры.
-
-> *Часть `for_each-vm.tf` с использованием `for_each loop`:*
-
-```bash
-resource "yandex_compute_instance" "fe_instance" {
-
-depends_on = [ yandex_compute_instance.web ]
-
-  for_each = { for vm in local.vms_fe: "${vm.vm_name}" => vm }
-  name = each.key
+Создадим файл [for_each-vm.tf](src%2Ffor_each-vm.tf) и добавим переменную ```each_vm``` в [variables.tf](src%2Fvariables.tf):
+```
+resource "yandex_compute_instance" "for_each" {
+  depends_on = [yandex_compute_instance.count]
+  for_each = {
+    main = var.each_vm[0]
+    replica = var.each_vm[1]
+  }
+  name        = "${each.key}"
   platform_id = "standard-v1"
   resources {
-     cores         = each.value.cpu
-     memory        = each.value.ram
-     core_fraction = each.value.frac
+    cores         = "${each.value.cpu}"
+    memory        = "${each.value.ram}"
+    core_fraction = 5
   }
-```
-
-> *Переменная:*
-
-```bash
-locals {
-  vms_fe = [
-    { 
-       vm_name = "main"
-       cpu     = 4
-       ram     = 4
-       frac    = 20
-    },
-    {
-       vm_name = "replica"
-       cpu     = 2
-       ram     = 2
-       frac    = 100
+  boot_disk {
+    initialize_params {
+      image_id = data.yandex_compute_image.ubuntu.image_id
+      type = "network-hdd"
+      size = "${each.value.disk}"
     }
-  ] 
+  }
+  scheduling_policy {
+    preemptible = true
+  }
+  network_interface {
+    subnet_id = yandex_vpc_subnet.develop.id
+    nat       = true
+    security_group_ids = [yandex_vpc_security_group.example.id]
+  }
+
+  metadata = {
+    serial-port-enable = 1
+    ssh-keys           = local.ssh
+  }
+
+}
+```
+```
+variable "each_vm" {
+  type = list(object({  cpu=number, ram=number, disk=number }))
+  default = [
+    {  cpu=4, ram=2, disk=10 },
+    {  cpu=2, ram=1, disk=15 }
+  ]
 }
 ```
 
-3. ВМ из пункта 2.2 должны создаваться после создания ВМ из пункта 2.1.
+Добавим в [for_each-vm.tf](src%2Ffor_each-vm.tf) атрибут ```depends_on = [yandex_compute_instance.count]```, чтобы данный ресурс создавался после первых ВМ
 
-> *Созданные в указанном порядке ВМ:*
+Создадим файл [locals.tf](src%2Flocals.tf), куда внесем переменную ```ssh```, для считывания ключа ~/.ssh/id_ed25519.pub и его последующего использования в блоке metadata:
+```
+locals {
+  ssh = "${"ubuntu"}:${file("~/.ssh/id_ed25519.pub")}"
+}
+```
+
+*Созданные в указанном порядке ВМ:*
 
 ![terraform_03_02](./2-2-1.jpg)
 
-> *Для этого использовал аргумент `depends_on = [ yandex_compute_instance.web ]`*
-
-4. Используйте функцию file в local переменной для считывания ключа ~/.ssh/id_rsa.pub и его последующего использования в блоке metadata, взятому из ДЗ №2.
-
-> *Переменная:*
-```bash
-locals {
-  ssh = "ubuntu:${file("~/.ssh/id_rsa.pub")}"
-}
-```
-
-> *'Metadata:'*
-```bash
-metadata = {
-  ssh-keys = local.ssh
-}
-```
-
-5. Инициализируйте проект, выполните код.
+Инициализируйте проект, выполните код.
 
 <details>
  <summary>РЕЗУЛЬТАТ</summary>
@@ -502,25 +499,85 @@ Apply complete! Resources: 7 added, 0 changed, 0 destroyed.
 ### Задание 3
 
 1. Создайте 3 одинаковых виртуальных диска, размером 1 Гб с помощью ресурса yandex_compute_disk и мета-аргумента count в файле **disk_vm.tf** .
-
-```bash
-resource "yandex_compute_disk" "stor" {
-  count   = 3
-  name    = "disk-${count.index + 1}"
-  size    = 1
+2. Создайте в том же файле одну ВМ c именем "storage" . Используйте блок **dynamic secondary_disk{..}** и мета-аргумент for_each для подключения созданных вами дополнительных дисков.
+Создадим файл [disk_vm.tf](src%2Fdisk_vm.tf) и внесем в него ресурс ```yandex_compute_disk```:
+```
+resource "yandex_compute_disk" "disk_vm" {
+  count = 3
+  name = "${"disk"}-${count.index}"
+  size = 1
 }
 ```
+Добавим в файл [disk_vm.tf](src%2Fdisk_vm.tf) инструкции по созданию дополнительной ВМ и подключению к ней созданных дисков, добавим дополнительно инструкцию ```depends_on = [yandex_compute_disk.disk_vm]```, чтобы ВМ создавалась только после создания дисков:
 
-2. Создайте в том же файле одну ВМ c именем "storage" . Используйте блок **dynamic secondary_disk{..}** и мета-аргумент for_each для подключения созданных вами дополнительных дисков.
+```
+resource "yandex_compute_instance" "storage" {
+  name        = "storage"
+  depends_on = [yandex_compute_disk.disk_vm]
+  platform_id = "standard-v1"
+  resources {
+    cores         = 2
+    memory        = 1
+    core_fraction = 5
+  }
+  boot_disk {
+    initialize_params {
+      image_id = data.yandex_compute_image.ubuntu.image_id
+    }
+  }
 
-```bash
 dynamic "secondary_disk" {
-  for_each = "${yandex_compute_disk.stor.*.id}"
+  for_each = yandex_compute_disk.disk_vm[*].id
   content {
-    disk_id = yandex_compute_disk.stor["${secondary_disk.key}"].id
+    disk_id = secondary_disk.value
   }
 }
+
+  scheduling_policy {
+    preemptible = true
+  }
+  network_interface {
+    subnet_id = yandex_vpc_subnet.develop.id
+    nat       = true
+    security_group_ids = [yandex_vpc_security_group.example.id]
+  }
+
+  metadata = {
+    serial-port-enable = 1
+    ssh-keys           = "ubuntu:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2kpc8hkCtD5uVQdw0wUeGlNp/rKarSrCKoifhuRtCF shakal@Razer"
+  }
+
+}
 ```
+Инициализируем проект:
+```
+Plan: 4 to add, 0 to change, 0 to destroy.
+
+Do you want to perform these actions?
+  Terraform will perform the actions described above.
+  Only 'yes' will be accepted to approve.
+
+  Enter a value: yes
+
+yandex_compute_disk.disk_vm[0]: Creating...
+yandex_compute_disk.disk_vm[2]: Creating...
+yandex_compute_disk.disk_vm[1]: Creating...
+yandex_compute_disk.disk_vm[0]: Creation complete after 7s [id=fhmjo6adscnlu308rfdo]
+yandex_compute_disk.disk_vm[2]: Creation complete after 7s [id=fhmhe8hpktb181rsuaip]
+yandex_compute_disk.disk_vm[1]: Still creating... [10s elapsed]
+yandex_compute_disk.disk_vm[1]: Still creating... [20s elapsed]
+yandex_compute_disk.disk_vm[1]: Still creating... [30s elapsed]
+yandex_compute_disk.disk_vm[1]: Still creating... [40s elapsed]
+yandex_compute_disk.disk_vm[1]: Creation complete after 40s [id=fhm19phfeaemg4ovo78b]
+yandex_compute_instance.storage: Creating...
+yandex_compute_instance.storage: Still creating... [10s elapsed]
+yandex_compute_instance.storage: Still creating... [20s elapsed]
+yandex_compute_instance.storage: Still creating... [30s elapsed]
+yandex_compute_instance.storage: Creation complete after 34s [id=fhm78165hu031u274849]
+
+Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
+```
+
 ![terraform_03_02](./3-2.jpg)
 
 ------
