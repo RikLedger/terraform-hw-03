@@ -584,111 +584,53 @@ Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
 
 ### Задание 4
 
-1. В файле ansible.tf создайте inventory-файл для ansible.
-Используйте функцию tepmplatefile и файл-шаблон для создания ansible inventory-файла из лекции.
-Готовый код возьмите из демонстрации к лекции [**demonstration2**](https://github.com/netology-code/ter-homeworks/tree/main/demonstration2).
-Передайте в него в качестве переменных группы виртуальных машин из задания 2.1, 2.2 и 3.2.(т.е. 5 ВМ)
+1. В файле ansible.tf создайте inventory-файл для ansible. Используйте функцию tepmplatefile и файл-шаблон для создания ansible inventory-файла из лекции. Готовый код возьмите из демонстрации к лекции demonstration2. Передайте в него в качестве переменных группы виртуальных машин из задания 2.1, 2.2 и 3.2, т. е. 5 ВМ.
+2. Инвентарь должен содержать 3 группы [webservers], [databases], [storage] и быть динамическим, т. е. обработать как группу из 2-х ВМ, так и 999 ВМ.
+3. Выполните код. Приложите скриншот получившегося файла.
 
-> *inventory.tftpl:*
-
-```bash
-[webservers]
-
-%{~ for i in webservers ~}
-%{ if "${i["network_interface"][0]["nat"]}" != false }
-${i["name"]}   ansible_host=${i["network_interface"][0]["nat_ip_address"]}
-%{ else }
-${i["name"]}   ansible_host=${i["network_interface"][0]["ip_address"]}
-%{ endif}
-%{~ endfor ~}
-
-[databases]
-
-%{~ for i in fe_instance ~}
-%{ if "${i["network_interface"][0]["nat"]}" != false }
-${i["name"]}   ansible_host=${i["network_interface"][0]["nat_ip_address"]}
-%{ else }
-${i["name"]}   ansible_host=${i["network_interface"][0]["ip_address"]}
-%{ endif}
-%{~ endfor ~}
-
-[storage]
-
-%{~ for i in stor_instance ~}
-  %{ if "${i["network_interface"][0]["nat"]}" != false }
-${i["name"]}   ansible_host=${i["network_interface"][0]["nat_ip_address"]}
-%{ else }
-${i["name"]}   ansible_host=${i["network_interface"][0]["ip_address"]}
-%{ endif}
-%{~ endfor ~}
+Создадим файл [ansible.tf](src%2Fansible.tf):
 ```
-
-> *Код для создания файла inventory:*
-
-```bash
-resource "local_file" "inventory_cfg" {
-  content = templatefile("${path.module}/inventory.tftpl",
-    { 
-      webservers    = yandex_compute_instance.web,
-      fe_instance   = yandex_compute_instance.fe_instance,
-      stor_instance = [yandex_compute_instance.stor_instance]
-    }
-  )
-
-  filename = "${abspath(path.module)}/inventory"
-}
-
-resource "null_resource" "web_hosts_provision" {
-
-#Ждем создания инстанса
-depends_on = [yandex_compute_instance.stor_instance, local_file.inventory_cfg]
-
-#Добавление ПРИВАТНОГО ssh ключа в ssh-agent
-  /*provisioner "local-exec" {
-    command = "cat ~/.ssh/id_ed25519 | ssh-add -"
-  }
-*/
-#Костыль!!! Даем ВМ время на первый запуск. Лучше выполнить это через wait_for port 22 на стороне ansible
- provisioner "local-exec" {
-    command = "sleep 90"
-  }
-
-#Запуск ansible-playbook
-  provisioner "local-exec" {
-    command  = "export ANSIBLE_HOST_KEY_CHECKING=False; ansible-playbook -i ${abspath(path.module)}/inventory ${abspath(path.module)}/test.yml"
-    on_failure = continue #Продолжить выполнение terraform pipeline в случае ошибок
-    environment = { ANSIBLE_HOST_KEY_CHECKING = "False" }
-    #срабатывание триггера при изменении переменных
-  }
-    triggers = {
-      always_run         = "${timestamp()}" #всегда т.к. дата и время постоянно изменяются
-      playbook_src_hash  = file("${abspath(path.module)}/test.yml") # при изменении содержимого playbook файла
-      ssh_public_key     = local.ssh # при изменении переменной
-    }
-
+resource "local_file" "ansible_inventory" {
+  filename = "./inventory.yml"
+  content = templatefile("ansible.tftpl", {
+    webservers = yandex_compute_instance.count,
+    databases = yandex_compute_instance.for_each,
+    storage = yandex_compute_instance.storage,
+  })
 }
 ```
-
-2. Инвентарь должен содержать 3 группы [webservers], [databases], [storage] и быть динамическим, т.е. обработать как группу из 2-х ВМ так и 999 ВМ.
-3. Выполните код. Приложите скриншот получившегося файла. 
-
-```bash
+Создадим файл-шаблон [ansible.tftpl](src%2Fansible.tftpl):
+```
 [webservers]
-
-web-1   ansible_host=62.84.115.206
-
-web-2   ansible_host=51.250.93.181
+%{ for i in webservers }
+${i["name"]} ansible_host=${i["network_interface"][0]["nat_ip_address"]}
+%{ endfor }
 
 [databases]
-
-main   ansible_host=62.84.116.92
-
-replica   ansible_host=51.250.15.184
+%{ for i in databases }
+${i["name"]} ansible_host=${i["network_interface"][0]["nat_ip_address"]}
+%{ endfor }
 
 [storage]
+%{ for i in storage }
+${i["name"]} ansible_host=${i["network_interface"][0]["nat_ip_address"]}
+%{ endfor }
+```
+Для того чтобы работала подстановка адресов группы ```storage```, в файле [disk_vm.tf](src%2Fdisk_vm.tf) необходимо добавить цикличность создания ВМ:
+```
+resource "yandex_compute_instance" "storage" {
+  count = 1
+  name        = "storage-${count.index+1}"
+  depends_on = [yandex_compute_disk.disk_vm]
+  platform_id = "standard-v1"
+```
+Выполним код:
+
+![terraform_04_01](./4-1.jpg)
+
+Получившийся [inventory.yml](src%2Finventory.yml):
+
+![terraform_04_02](./4-2.jpg)
   
-storage   ansible_host=51.250.12.45
-```
-
 ------
 
