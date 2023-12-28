@@ -1,15 +1,11 @@
-data "yandex_compute_image" "ubuntu" {
-  family = "ubuntu-2004-lts"
-}
-
-resource "yandex_compute_instance" "count" {
-  count = 2
-  name        = "web-${count.index+1}"
+resource "yandex_compute_instance" "backend_server" {
+  count       = 2
+  name        = "web-${count.index + 1}"
   platform_id = "standard-v1"
   resources {
-    cores         = 2
-    memory        = 1
-    core_fraction = 5
+    cores         = var.vm_base.cores
+    memory        = var.vm_base.memory
+    core_fraction = var.vm_base.core_fraction
   }
   boot_disk {
     initialize_params {
@@ -22,12 +18,7 @@ resource "yandex_compute_instance" "count" {
   network_interface {
     subnet_id = yandex_vpc_subnet.develop.id
     nat       = true
-    security_group_ids = [yandex_vpc_security_group.example.id]
   }
-
-  metadata = {
-    serial-port-enable = 1
-    ssh-keys           = local.ssh
-  }
+  metadata = local.ssh_keys_and_serial_port
 
 }
