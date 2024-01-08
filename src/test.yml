@@ -8,11 +8,9 @@
   become: yes
   tasks:
 
-  - local_action: wait_for port=22 host="{{ ansible_ssh_host }}"  search_regex=OpenSSH delay=10
-  
   - name: Install Nginx Web Server on Debian Family
     apt:
       name: nginx
-      state: latest   
-      update_cache: yes 
+      state: latest
+      update_cache: yes
     
