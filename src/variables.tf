@@ -30,11 +30,9 @@ variable "vpc_name" {
   default     = "develop"
   description = "VPC network&subnet name"
 }
-
-variable "each_vm" {
-  type = list(object({  cpu=number, ram=number, disk=number }))
-  default = [
-    {  cpu=4, ram=2, disk=10 },
-    {  cpu=2, ram=1, disk=15 }
-  ]
+/*
+variable "public_key" {
+  type    = string
+  default = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIjKG3j7XxY3d7HWOm+GapAnyhBQHDG2niTOEtNwpq2G gorbachev@Debian"
 }
+*/
