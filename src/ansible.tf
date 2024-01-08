@@ -1,8 +1,8 @@
-resource "local_file" "ansible_inventory" {
-  filename = "./inventory.yml"
-  content = templatefile("ansible.tftpl", {
-    webservers = yandex_compute_instance.count,
-    databases = yandex_compute_instance.for_each,
-    storage = yandex_compute_instance.storage,
-  })
+resource "local_file" "hosts_cfg" {
+  content = templatefile("${path.module}/hosts.tftpl",
+   {webservers =  yandex_compute_instance.web
+    databases = yandex_compute_instance.for_each
+    storage = [yandex_compute_instance.storage]}
+  )
+  filename = "${abspath(path.module)}/hosts.cfg"
 }
