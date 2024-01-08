@@ -10,627 +10,92 @@
 
 Приложите скриншот входящих правил "Группы безопасности" в ЛК Yandex Cloud  или скриншот отказа в предоставлении доступа к preview версии.
 
-![terraform_03_01](./1.jpg)
+![terraform_03_01](IMG/img_1.png)
+
 ------
 
 ### Задание 2
 
-1. Создайте файл count-vm.tf. Опишите в нем создание двух **одинаковых** ВМ  web-1 и web-2(не web-0 и web-1!), с минимальными параметрами, используя мета-аргумент **count loop**. Назначьте ВМ созданную в 1-м задании группу безопасности.
+1. Создайте файл count-vm.tf. Опишите в нём создание двух **одинаковых** ВМ  web-1 и web-2 (не web-0 и web-1) с минимальными параметрами, используя мета-аргумент **count loop**. Назначьте ВМ созданную в первом задании группу безопасности.(как это сделать узнайте в документации провайдера yandex/compute_instance )
+2. Создайте файл for_each-vm.tf. Опишите в нём создание двух ВМ с именами "main" и "replica" **разных** по cpu/ram/disk , используя мета-аргумент **for_each loop**. Используйте для обеих ВМ одну общую переменную типа list(object({ vm_name=string, cpu=number, ram=number, disk=number  })). При желании внесите в переменную все возможные параметры.
+3. ВМ из пункта 2.2 должны создаваться после создания ВМ из пункта 2.1.
+4. Используйте функцию file в local-переменной для считывания ключа ~/.ssh/id_rsa.pub и его последующего использования в блоке metadata, взятому из ДЗ 2.
+5. Инициализируйте проект, выполните код.
 
-Создадим файл [count-vm.tf](src%2Fcount-vm.tf):
-```
-data "yandex_compute_image" "ubuntu" {
-  family = "ubuntu-2004-lts"
-}
+### Решение 2
 
-resource "yandex_compute_instance" "count" {
-  count = 2
-  name        = "web-${count.index+1}"
-  platform_id = "standard-v1"
-  resources {
-    cores         = 2
-    memory        = 1
-    core_fraction = 5
-  }
-  boot_disk {
-    initialize_params {
-      image_id = data.yandex_compute_image.ubuntu.image_id
-    }
-  }
-  scheduling_policy {
-    preemptible = true
-  }
-  network_interface {
-    subnet_id = yandex_vpc_subnet.develop.id
-    nat       = true
-    security_group_ids = [yandex_vpc_security_group.example.id]
-  }
+1. Создал файл count-vm.tf и описал в нем 2 одинаковые виртуальные машины, которые будут называться web-1 и web-2:
 
-  metadata = {
-    serial-port-enable = 1
-    ssh-keys           = "ubuntu:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2kpc8hkCtD5uVQdw0wUeGlNp/rKarSrCKoifhuRtCF gorbachev@ubuntu"
-  }
+![img_2.png](IMG/img_2.png)
 
-}
-```
-![terraform_03_02](./2-1-1.jpg)
+Назначил виртуальной машине созданную в первом задании группу безопасности:
 
-![terraform_03_02](./2-1-2_2.jpg)
+![img_3.png](IMG/img_3.png)
 
-Создадим файл [for_each-vm.tf](src%2Ffor_each-vm.tf) и добавим переменную ```each_vm``` в [variables.tf](src%2Fvariables.tf):
-```
-resource "yandex_compute_instance" "for_each" {
-  depends_on = [yandex_compute_instance.count]
-  for_each = {
-    main = var.each_vm[0]
-    replica = var.each_vm[1]
-  }
-  name        = "${each.key}"
-  platform_id = "standard-v1"
-  resources {
-    cores         = "${each.value.cpu}"
-    memory        = "${each.value.ram}"
-    core_fraction = 5
-  }
-  boot_disk {
-    initialize_params {
-      image_id = data.yandex_compute_image.ubuntu.image_id
-      type = "network-hdd"
-      size = "${each.value.disk}"
-    }
-  }
-  scheduling_policy {
-    preemptible = true
-  }
-  network_interface {
-    subnet_id = yandex_vpc_subnet.develop.id
-    nat       = true
-    security_group_ids = [yandex_vpc_security_group.example.id]
-  }
+2. Создал файл for_each-vm.tf. В нем описал создание двух ВМ с именами "main" и "replica" разных по cpu/ram/disk , используя мета-аргумент for_each loop:
 
-  metadata = {
-    serial-port-enable = 1
-    ssh-keys           = local.ssh
-  }
+![img_4.png](IMG/img_4.png)
 
-}
-```
-```
-variable "each_vm" {
-  type = list(object({  cpu=number, ram=number, disk=number }))
-  default = [
-    {  cpu=4, ram=2, disk=10 },
-    {  cpu=2, ram=1, disk=15 }
-  ]
-}
-```
+3. ВМ с именами "main" и "replica" создаются после создания ВМ web-1 и web-2:
 
-Добавим в [for_each-vm.tf](src%2Ffor_each-vm.tf) атрибут ```depends_on = [yandex_compute_instance.count]```, чтобы данный ресурс создавался после первых ВМ
+![img_5.png](IMG/img_5.png)
 
-Создадим файл [locals.tf](src%2Flocals.tf), куда внесем переменную ```ssh```, для считывания ключа ~/.ssh/id_ed25519.pub и его последующего использования в блоке metadata:
-```
-locals {
-  ssh = "${"ubuntu"}:${file("~/.ssh/id_ed25519.pub")}"
-}
-```
+4. Для считывания файла ключа использую local-переменную и использую ее в блоке metadata:
 
-*Созданные в указанном порядке ВМ:*
+![img_6.png](IMG/img_6.png)
 
-![terraform_03_02](./2-2-1.jpg)
+![img_7.png](IMG/img_7.png)
 
-Инициализируйте проект, выполните код.
+5. Инициализировал проект, выполнил код. Создалось 7 объектов - сеть, подсеть, группа безопасности и 4 виртуальные машины:
 
-<details>
- <summary>РЕЗУЛЬТАТ</summary>
-   
-```bash
-gorbachev@debian:~/ter-homeworks/03/src$ terraform apply
-
-Terraform used the selected providers to generate the following execution plan. Resource actions are indicated with the following symbols:
-  + create
-
-Terraform will perform the following actions:
-
-  # yandex_compute_instance.fe_instance["main"] will be created
-  + resource "yandex_compute_instance" "fe_instance" {
-      + created_at                = (known after apply)
-      + folder_id                 = (known after apply)
-      + fqdn                      = (known after apply)
-      + gpu_cluster_id            = (known after apply)
-      + hostname                  = (known after apply)
-      + id                        = (known after apply)
-      + metadata                  = {
-          + "ssh-keys" = <<-EOT
-                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@ubuntu
-            EOT
-        }
-      + name                      = "main"
-      + network_acceleration_type = "standard"
-      + platform_id               = "standard-v1"
-      + service_account_id        = (known after apply)
-      + status                    = (known after apply)
-      + zone                      = (known after apply)
-
-      + boot_disk {
-          + auto_delete = true
-          + device_name = (known after apply)
-          + disk_id     = (known after apply)
-          + mode        = (known after apply)
-
-          + initialize_params {
-              + block_size  = (known after apply)
-              + description = (known after apply)
-              + image_id    = "fd8g64rcu9fq5kpfqls0"
-              + name        = (known after apply)
-              + size        = (known after apply)
-              + snapshot_id = (known after apply)
-              + type        = "network-hdd"
-            }
-        }
-
-      + network_interface {
-          + index              = (known after apply)
-          + ip_address         = (known after apply)
-          + ipv4               = true
-          + ipv6               = (known after apply)
-          + ipv6_address       = (known after apply)
-          + mac_address        = (known after apply)
-          + nat                = true
-          + nat_ip_address     = (known after apply)
-          + nat_ip_version     = (known after apply)
-          + security_group_ids = (known after apply)
-          + subnet_id          = (known after apply)
-        }
-
-      + resources {
-          + core_fraction = 20
-          + cores         = 4
-          + memory        = 4
-        }
-    }
-
-  # yandex_compute_instance.fe_instance["replica"] will be created
-  + resource "yandex_compute_instance" "fe_instance" {
-      + created_at                = (known after apply)
-      + folder_id                 = (known after apply)
-      + fqdn                      = (known after apply)
-      + gpu_cluster_id            = (known after apply)
-      + hostname                  = (known after apply)
-      + id                        = (known after apply)
-      + metadata                  = {
-          + "ssh-keys" = <<-EOT
-                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@ubuntu
-            EOT
-        }
-      + name                      = "replica"
-      + network_acceleration_type = "standard"
-      + platform_id               = "standard-v1"
-      + service_account_id        = (known after apply)
-      + status                    = (known after apply)
-      + zone                      = (known after apply)
-
-      + boot_disk {
-          + auto_delete = true
-          + device_name = (known after apply)
-          + disk_id     = (known after apply)
-          + mode        = (known after apply)
-
-          + initialize_params {
-              + block_size  = (known after apply)
-              + description = (known after apply)
-              + image_id    = "fd8g64rcu9fq5kpfqls0"
-              + name        = (known after apply)
-              + size        = (known after apply)
-              + snapshot_id = (known after apply)
-              + type        = "network-hdd"
-            }
-        }
-
-      + network_interface {
-          + index              = (known after apply)
-          + ip_address         = (known after apply)
-          + ipv4               = true
-          + ipv6               = (known after apply)
-          + ipv6_address       = (known after apply)
-          + mac_address        = (known after apply)
-          + nat                = true
-          + nat_ip_address     = (known after apply)
-          + nat_ip_version     = (known after apply)
-          + security_group_ids = (known after apply)
-          + subnet_id          = (known after apply)
-        }
-
-      + resources {
-          + core_fraction = 100
-          + cores         = 2
-          + memory        = 2
-        }
-    }
-
-  # yandex_compute_instance.web[0] will be created
-  + resource "yandex_compute_instance" "web" {
-      + created_at                = (known after apply)
-      + folder_id                 = (known after apply)
-      + fqdn                      = (known after apply)
-      + gpu_cluster_id            = (known after apply)
-      + hostname                  = (known after apply)
-      + id                        = (known after apply)
-      + metadata                  = {
-          + "ssh-keys" = <<-EOT
-                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@ubuntu
-            EOT
-        }
-      + name                      = "web-1"
-      + network_acceleration_type = "standard"
-      + platform_id               = "standard-v1"
-      + service_account_id        = (known after apply)
-      + status                    = (known after apply)
-      + zone                      = (known after apply)
-
-      + boot_disk {
-          + auto_delete = true
-          + device_name = (known after apply)
-          + disk_id     = (known after apply)
-          + mode        = (known after apply)
-
-          + initialize_params {
-              + block_size  = (known after apply)
-              + description = (known after apply)
-              + image_id    = "fd8g64rcu9fq5kpfqls0"
-              + name        = (known after apply)
-              + size        = (known after apply)
-              + snapshot_id = (known after apply)
-              + type        = "network-hdd"
-            }
-        }
-
-      + network_interface {
-          + index              = (known after apply)
-          + ip_address         = (known after apply)
-          + ipv4               = true
-          + ipv6               = (known after apply)
-          + ipv6_address       = (known after apply)
-          + mac_address        = (known after apply)
-          + nat                = true
-          + nat_ip_address     = (known after apply)
-          + nat_ip_version     = (known after apply)
-          + security_group_ids = (known after apply)
-          + subnet_id          = (known after apply)
-        }
-
-      + resources {
-          + core_fraction = 20
-          + cores         = 2
-          + memory        = 2
-        }
-    }
-
-  # yandex_compute_instance.web[1] will be created
-  + resource "yandex_compute_instance" "web" {
-      + created_at                = (known after apply)
-      + folder_id                 = (known after apply)
-      + fqdn                      = (known after apply)
-      + gpu_cluster_id            = (known after apply)
-      + hostname                  = (known after apply)
-      + id                        = (known after apply)
-      + metadata                  = {
-          + "ssh-keys" = <<-EOT
-                ubuntu:ssh-rsa AAAAB3.......................................................................RAqNVz gorbachev@ubuntu
-            EOT
-        }
-      + name                      = "web-2"
-      + network_acceleration_type = "standard"
-      + platform_id               = "standard-v1"
-      + service_account_id        = (known after apply)
-      + status                    = (known after apply)
-      + zone                      = (known after apply)
-
-      + boot_disk {
-          + auto_delete = true
-          + device_name = (known after apply)
-          + disk_id     = (known after apply)
-          + mode        = (known after apply)
-
-          + initialize_params {
-              + block_size  = (known after apply)
-              + description = (known after apply)
-              + image_id    = "fd8g64rcu9fq5kpfqls0"
-              + name        = (known after apply)
-              + size        = (known after apply)
-              + snapshot_id = (known after apply)
-              + type        = "network-hdd"
-            }
-        }
-
-      + network_interface {
-          + index              = (known after apply)
-          + ip_address         = (known after apply)
-          + ipv4               = true
-          + ipv6               = (known after apply)
-          + ipv6_address       = (known after apply)
-          + mac_address        = (known after apply)
-          + nat                = true
-          + nat_ip_address     = (known after apply)
-          + nat_ip_version     = (known after apply)
-          + security_group_ids = (known after apply)
-          + subnet_id          = (known after apply)
-        }
-
-      + resources {
-          + core_fraction = 20
-          + cores         = 2
-          + memory        = 2
-        }
-    }
-
-  # yandex_vpc_network.develop will be created
-  + resource "yandex_vpc_network" "develop" {
-      + created_at                = (known after apply)
-      + default_security_group_id = (known after apply)
-      + folder_id                 = (known after apply)
-      + id                        = (known after apply)
-      + labels                    = (known after apply)
-      + name                      = "develop"
-      + subnet_ids                = (known after apply)
-    }
-
-  # yandex_vpc_security_group.example will be created
-  + resource "yandex_vpc_security_group" "example" {
-      + created_at = (known after apply)
-      + folder_id  = "b1gads94fhccurj7j4uk"
-      + id         = (known after apply)
-      + labels     = (known after apply)
-      + name       = "example_dynamic"
-      + network_id = (known after apply)
-      + status     = (known after apply)
-
-      + egress {
-          + description    = "разрешить весь исходящий трафик"
-          + from_port      = 0
-          + id             = (known after apply)
-          + labels         = (known after apply)
-          + port           = -1
-          + protocol       = "TCP"
-          + to_port        = 65365
-          + v4_cidr_blocks = [
-              + "0.0.0.0/0",
-            ]
-          + v6_cidr_blocks = []
-        }
-
-      + ingress {
-          + description    = "разрешить входящий  http"
-          + from_port      = -1
-          + id             = (known after apply)
-          + labels         = (known after apply)
-          + port           = 80
-          + protocol       = "TCP"
-          + to_port        = -1
-          + v4_cidr_blocks = [
-              + "0.0.0.0/0",
-            ]
-          + v6_cidr_blocks = []
-        }
-      + ingress {
-          + description    = "разрешить входящий https"
-          + from_port      = -1
-          + id             = (known after apply)
-          + labels         = (known after apply)
-          + port           = 443
-          + protocol       = "TCP"
-          + to_port        = -1
-          + v4_cidr_blocks = [
-              + "0.0.0.0/0",
-            ]
-          + v6_cidr_blocks = []
-        }
-      + ingress {
-          + description    = "разрешить входящий ssh"
-          + from_port      = -1
-          + id             = (known after apply)
-          + labels         = (known after apply)
-          + port           = 22
-          + protocol       = "TCP"
-          + to_port        = -1
-          + v4_cidr_blocks = [
-              + "0.0.0.0/0",
-            ]
-          + v6_cidr_blocks = []
-        }
-    }
-
-  # yandex_vpc_subnet.develop will be created
-  + resource "yandex_vpc_subnet" "develop" {
-      + created_at     = (known after apply)
-      + folder_id      = (known after apply)
-      + id             = (known after apply)
-      + labels         = (known after apply)
-      + name           = "develop"
-      + network_id     = (known after apply)
-      + v4_cidr_blocks = [
-          + "10.0.1.0/24",
-        ]
-      + v6_cidr_blocks = (known after apply)
-      + zone           = "ru-central1-a"
-    }
-
-Plan: 7 to add, 0 to change, 0 to destroy.
-
-Do you want to perform these actions?
-  Terraform will perform the actions described above.
-  Only 'yes' will be accepted to approve.
-
-  Enter a value: yes
-
-yandex_vpc_network.develop: Creating...
-yandex_vpc_network.develop: Creation complete after 2s [id=enpkf1dv1gq2qg5d3ipb]
-yandex_vpc_subnet.develop: Creating...
-yandex_vpc_security_group.example: Creating...
-yandex_vpc_subnet.develop: Creation complete after 0s [id=e9b9spar0vshlgfbpudl]
-yandex_compute_instance.web[1]: Creating...
-yandex_compute_instance.web[0]: Creating...
-yandex_vpc_security_group.example: Creation complete after 1s [id=enp58tt9q52khoo9i1q4]
-yandex_compute_instance.web[1]: Still creating... [10s elapsed]
-yandex_compute_instance.web[0]: Still creating... [10s elapsed]
-yandex_compute_instance.web[1]: Still creating... [20s elapsed]
-yandex_compute_instance.web[0]: Still creating... [20s elapsed]
-yandex_compute_instance.web[1]: Still creating... [30s elapsed]
-yandex_compute_instance.web[0]: Still creating... [30s elapsed]
-yandex_compute_instance.web[0]: Creation complete after 39s [id=fhmdm9d51cm90o7679i5]
-yandex_compute_instance.web[1]: Still creating... [40s elapsed]
-yandex_compute_instance.web[1]: Creation complete after 45s [id=fhmigjpjm8c8nofat616]
-yandex_compute_instance.fe_instance["replica"]: Creating...
-yandex_compute_instance.fe_instance["main"]: Creating...
-yandex_compute_instance.fe_instance["replica"]: Still creating... [10s elapsed]
-yandex_compute_instance.fe_instance["main"]: Still creating... [10s elapsed]
-yandex_compute_instance.fe_instance["replica"]: Still creating... [20s elapsed]
-yandex_compute_instance.fe_instance["main"]: Still creating... [20s elapsed]
-yandex_compute_instance.fe_instance["replica"]: Still creating... [30s elapsed]
-yandex_compute_instance.fe_instance["main"]: Still creating... [30s elapsed]
-yandex_compute_instance.fe_instance["main"]: Creation complete after 35s [id=fhmpgu7n8bhoc589e8k1]
-yandex_compute_instance.fe_instance["replica"]: Creation complete after 39s [id=fhmmcp64om0rck1kdj5n]
-
-Apply complete! Resources: 7 added, 0 changed, 0 destroyed.
-```
-</details>
+![img_8.png](IMG/img_8.png)
 
 ------
 
 ### Задание 3
 
-1. Создайте 3 одинаковых виртуальных диска, размером 1 Гб с помощью ресурса yandex_compute_disk и мета-аргумента count в файле **disk_vm.tf** .
-2. Создайте в том же файле одну ВМ c именем "storage" . Используйте блок **dynamic secondary_disk{..}** и мета-аргумент for_each для подключения созданных вами дополнительных дисков.
-Создадим файл [disk_vm.tf](src%2Fdisk_vm.tf) и внесем в него ресурс ```yandex_compute_disk```:
-```
-resource "yandex_compute_disk" "disk_vm" {
-  count = 3
-  name = "${"disk"}-${count.index}"
-  size = 1
-}
-```
-Добавим в файл [disk_vm.tf](src%2Fdisk_vm.tf) инструкции по созданию дополнительной ВМ и подключению к ней созданных дисков, добавим дополнительно инструкцию ```depends_on = [yandex_compute_disk.disk_vm]```, чтобы ВМ создавалась только после создания дисков:
+1. Создайте 3 одинаковых виртуальных диска размером 1 Гб с помощью ресурса yandex_compute_disk и мета-аргумента count в файле **disk_vm.tf** .
+2. Создайте в том же файле **одиночную**(использовать count или for_each запрещено из-за задания №4) ВМ c именем "storage"  . Используйте блок **dynamic secondary_disk{..}** и мета-аргумент for_each для подключения созданных вами дополнительных дисков.
 
-```
-resource "yandex_compute_instance" "storage" {
-  name        = "storage"
-  depends_on = [yandex_compute_disk.disk_vm]
-  platform_id = "standard-v1"
-  resources {
-    cores         = 2
-    memory        = 1
-    core_fraction = 5
-  }
-  boot_disk {
-    initialize_params {
-      image_id = data.yandex_compute_image.ubuntu.image_id
-    }
-  }
+### Решение 3
 
-dynamic "secondary_disk" {
-  for_each = yandex_compute_disk.disk_vm[*].id
-  content {
-    disk_id = secondary_disk.value
-  }
-}
+1. Создал 3 одинаковых диска:
 
-  scheduling_policy {
-    preemptible = true
-  }
-  network_interface {
-    subnet_id = yandex_vpc_subnet.develop.id
-    nat       = true
-    security_group_ids = [yandex_vpc_security_group.example.id]
-  }
+![img_9.png](IMG/img_9.png)
 
-  metadata = {
-    serial-port-enable = 1
-    ssh-keys           = "ubuntu:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2kpc8hkCtD5uVQdw0wUeGlNp/rKarSrCKoifhuRtCF gorbachev@ubuntu"
-  }
+2. Создал виртуальную машину storage и используя мета-аргумент for_each подключил к ней созданные диски:
 
-}
-```
-Инициализируем проект:
-```
-Plan: 4 to add, 0 to change, 0 to destroy.
-
-Do you want to perform these actions?
-  Terraform will perform the actions described above.
-  Only 'yes' will be accepted to approve.
-
-  Enter a value: yes
-
-yandex_compute_disk.disk_vm[0]: Creating...
-yandex_compute_disk.disk_vm[2]: Creating...
-yandex_compute_disk.disk_vm[1]: Creating...
-yandex_compute_disk.disk_vm[0]: Creation complete after 7s [id=fhmjo6adscnlu308rfdo]
-yandex_compute_disk.disk_vm[2]: Creation complete after 7s [id=fhmhe8hpktb181rsuaip]
-yandex_compute_disk.disk_vm[1]: Still creating... [10s elapsed]
-yandex_compute_disk.disk_vm[1]: Still creating... [20s elapsed]
-yandex_compute_disk.disk_vm[1]: Still creating... [30s elapsed]
-yandex_compute_disk.disk_vm[1]: Still creating... [40s elapsed]
-yandex_compute_disk.disk_vm[1]: Creation complete after 40s [id=fhm19phfeaemg4ovo78b]
-yandex_compute_instance.storage: Creating...
-yandex_compute_instance.storage: Still creating... [10s elapsed]
-yandex_compute_instance.storage: Still creating... [20s elapsed]
-yandex_compute_instance.storage: Still creating... [30s elapsed]
-yandex_compute_instance.storage: Creation complete after 34s [id=fhm78165hu031u274849]
-
-Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
-```
-
-![terraform_03_02](./3-2.jpg)
+![img_10.png](IMG/img_10.png)
 
 ------
 
 ### Задание 4
 
-1. В файле ansible.tf создайте inventory-файл для ansible. Используйте функцию tepmplatefile и файл-шаблон для создания ansible inventory-файла из лекции. Готовый код возьмите из демонстрации к лекции demonstration2. Передайте в него в качестве переменных группы виртуальных машин из задания 2
+1. В файле ansible.tf создайте inventory-файл для ansible.
+Используйте функцию tepmplatefile и файл-шаблон для создания ansible inventory-файла из лекции.
+Готовый код возьмите из демонстрации к лекции [**demonstration2**](https://github.com/netology-code/ter-homeworks/tree/main/03/demonstration2).
+Передайте в него в качестве переменных группы виртуальных машин из задания 2.1, 2.2 и 3.2, т. е. 5 ВМ.
 2. Инвентарь должен содержать 3 группы [webservers], [databases], [storage] и быть динамическим, т. е. обработать как группу из 2-х ВМ, так и 999 ВМ.
-3. Выполните код. Приложите скриншот получившегося файла.
+3. Выполните код. Приложите скриншот получившегося файла. 
 
-Создадим файл [ansible.tf](src%2Fansible.tf):
-```
-resource "local_file" "ansible_inventory" {
-  filename = "./inventory.yml"
-  content = templatefile("ansible.tftpl", {
-    webservers = yandex_compute_instance.count,
-    databases = yandex_compute_instance.for_each,
-    storage = yandex_compute_instance.storage,
-  })
-}
-```
-Создадим файл-шаблон [ansible.tftpl](src%2Fansible.tftpl):
-```
-[webservers]
-%{ for i in webservers }
-${i["name"]} ansible_host=${i["network_interface"][0]["nat_ip_address"]}
-%{ endfor }
+Для общего зачёта создайте в вашем GitHub-репозитории новую ветку terraform-03. Закоммитьте в эту ветку свой финальный код проекта, пришлите ссылку на коммит.   
+**Удалите все созданные ресурсы**.
 
-[databases]
-%{ for i in databases }
-${i["name"]} ansible_host=${i["network_interface"][0]["nat_ip_address"]}
-%{ endfor }
+### Решение 4
 
-[storage]
-%{ for i in storage }
-${i["name"]} ansible_host=${i["network_interface"][0]["nat_ip_address"]}
-%{ endfor }
-```
-Для того чтобы работала подстановка адресов группы ```storage```, в файле [disk_vm.tf](src%2Fdisk_vm.tf) необходимо добавить цикличность создания ВМ:
-```
-resource "yandex_compute_instance" "storage" {
-  count = 1
-  name        = "storage-${count.index+1}"
-  depends_on = [yandex_compute_disk.disk_vm]
-  platform_id = "standard-v1"
-```
-Выполним код:
+1. Создал файл ansible.tf, по примеру из лекции написал код с использованием функции tepmplatefile:
 
-![terraform_04_01](./4-1.jpg)
+![img_11.png](IMG/img_11.png)
 
-Получившийся [inventory.yml](src%2Finventory.yml):
+Шаблон инвентари файла использовал также из лекции.
 
-![terraform_04_02](./4-2.jpg)
-  
+2. Инвентари файл получился с 3 группами.
+
+3. Скриншот результата:
+
+![img_12.png](IMG/img_12.png)
+
 ------
+
+
 
